@@ -1,0 +1,50 @@
+# Adapted from YimMenu
+name: CI
+
+on:
+  pull_request:
+    paths:
+      - src/**
+      - CMakeLists.txt
+      - .github/workflows/ci.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: [self-hosted, Windows]
+    name: CI
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Check CMake version
+        run: cmake --version
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
+      - name: Generate CMake project
+        run: cmake -D CMAKE_BUILD_TYPE=Release -D OPTIMIZE=YES -S. -Bbuild -G Ninja
+
+      - name: Build 64bit release lib
+        run: cmake --build ./build --config Release --target telecaster --
+
+      - name: Check if lib got built
+        run: if (-Not (Test-Path -path "build/telecaster.lib")) {throw 1}
+
+      - name: Rename lib to telecaster-dev-{GITHUB_SHA}.lib
+        run: |
+          del telecaster-dev-*.lib
+          ren telecaster.lib telecaster-dev-${{github.sha}}.lib
+        working-directory: build/
+
+      - name: Upload Artifact (lib)
+        uses: actions/upload-artifact@v3
+        with:
+          name: binary
+          path: |
+            build/telecaster-dev-*.lib
